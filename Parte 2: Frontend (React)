@@ -1,0 +1,155 @@
+// frontend/src/App.js
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
+import './App.css';
+
+function App() {
+  const [veiculos, setVeiculos] = useState([]);
+  const [estacoes, setEstacoes] = useState([]);
+  const [dashboard, setDashboard] = useState({});
+  const [loading, setLoading] = useState(true);
+  const [aba, setAba] = useState('frota');
+  const [mensagem, setMensagem] = useState(null);
+
+  const API_URL = 'http://localhost:8000';
+
+  const carregarDados = async () => {
+    try {
+      setLoading(true);
+      const [resVeiculos, resEstacoes, resDashboard] = await Promise.all([
+        axios.get(`${API_URL}/api/veiculos`),
+        axios.get(`${API_URL}/api/estacoes`),
+        axios.get(`${API_URL}/api/dashboard`)
+      ]);
+      setVeiculos(resVeiculos.data);
+      setEstacoes(resEstacoes.data);
+      setDashboard(resDashboard.data);
+    } catch (error) {
+      console.error("Erro ao carregar dados:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAlugar = async (id, nome) => {
+    try {
+      setMensagem({ tipo: 'processando', texto: 'Processando locação...' });
+      await axios.post(`${API_URL}/api/locacoes?veiculo_id=${id}&usuario_id=1&km_inicial=0`);
+      setMensagem({ tipo: 'sucesso', texto: `✅ ${nome} locado com sucesso!` });
+      carregarDados();
+      setTimeout(() => setMensagem(null), 3000);
+    } catch (error) {
+      setMensagem({ tipo: 'erro', texto: `❌ Erro ao alugar ${nome}` });
+      setTimeout(() => setMensagem(null), 3000);
+    }
+  };
+
+  useEffect(() => {
+    carregarDados();
+  }, []);
+
+  return (
+    <div className="App">
+      <header className="App-header">
+        <div className="logo-area">
+          <span className="logo-icon">♻️</span>
+          <div className="logo-text">
+            <h1>Renova SVA</h1>
+            <p>Infraestrutura & Serviços de Locomoção Sustentável</p>
+          </div>
+        </div>
+      </header>
+
+      {mensagem && <div className={`mensagem ${mensagem.tipo}`}>{mensagem.texto}</div>}
+
+      <nav className="nav-tabs">
+        <button className={aba === 'frota' ? 'active' : ''} onClick={() => setAba('frota')}>
+          🚗 Frota
+        </button>
+        <button className={aba === 'estacoes' ? 'active' : ''} onClick={() => setAba('estacoes')}>
+          🔋 Estações
+        </button>
+        <button className={aba === 'dashboard' ? 'active' : ''} onClick={() => setAba('dashboard')}>
+          📊 Dashboard
+        </button>
+      </nav>
+
+      <main className="container">
+        {aba === 'frota' && (
+          <>
+            <div className="section-title">
+              <h2>🚗 Frota Disponível</h2>
+              <p>Escolha seu veículo sustentável</p>
+            </div>
+            <div className="grid">
+              {veiculos.map((v) => (
+                <div key={v.id} className={`card ${!v.disponivel ? 'indisponivel' : ''}`}>
+                  <div className="card-image">
+                    {v.imagem_url && <img src={v.imagem_url} alt={v.nome} />}
+                  </div>
+                  <div className="card-content">
+                    <h3>{v.nome}</h3>
+                    <span className="badge-tipo">{v.tipo}</span>
+                    <span className="badge-categoria">{v.categoria}</span>
+                    <div className="card-details">
+                      <div className="detail-item">
+                        <span>🔋 Autonomia</span>
+                        <span>{v.autonomia} km</span>
+                      </div>
+                      <div className="detail-item">
+                        <span>💰 Hora</span>
+                        <span>R$ {v.preco_por_hora.toFixed(2)}</span>
+                      </div>
+                      <div className="detail-item">
+                        <span>📏 Km</span>
+                        <span>R$ {v.preco_por_km.toFixed(2)}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="card-actions">
+                    {v.disponivel ? (
+                      <button className="btn-alugar" onClick={() => handleAlugar(v.id, v.nome)}>
+                        🚀 Alugar Agora
+                      </button>
+                    ) : (
+                      <button className="btn-indisponivel" disabled>⏳ Em Uso</button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+
+        {aba === 'estacoes' && (
+          <>
+            <div className="section-title">
+              <h2>🔋 Estações de Recarga</h2>
+              <p>Encontre a estação mais próxima</p>
+            </div>
+            <div className="grid">
+              {estacoes.map((e) => (
+                <div key={e.id} className="card estacion">
+                  <div className="card-content">
+                    <h3>{e.nome}</h3>
+                    <p className="endereco">📍 {e.endereco}</p>
+                    <div className="card-details">
+                      <div className="detail-item">
+                        <span>⚡ Tipo</span>
+                        <span>{e.tipo_carregador}</span>
+                      </div>
+                      <div className="detail-item">
+                        <span>🅿️ Vagas</span>
+                        <span>{e.vagas_disponiveis}/{e.capacidade}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+
+        {aba === 'dashboard' && (
+          <>
+            <div className="section-title
