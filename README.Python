@@ -1,0 +1,274 @@
+# backend/main.py
+"""
+Renova SVA - Backend API
+Plataforma de Infraestrutura e Serviços de Locomoção
+Desenvolvido em Python com FastAPI
+"""
+
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
+from typing import List, Optional
+from datetime import datetime
+
+# ======================
+# Configurações da API
+# ======================
+
+app = FastAPI(
+    title="Renova SVA API",
+    description="Backend para gestão de locomoção sustentável",
+    version="1.0.0",
+    docs_url="/docs",
+    redoc_url="/redoc"
+)
+
+# ======================
+# Modelos de Dados
+# ======================
+
+class Veiculo(BaseModel):
+    id: int
+    nome: str
+    tipo: str
+    modelo: str
+    autonomia: float
+    preco_por_hora: float
+    preco_por_km: float
+    disponivel: bool
+    imagem_url: Optional[str] = None
+    categoria: str  # Premium, Padrão, Básico
+
+class Locacao(BaseModel):
+    id: int
+    veiculo_id: int
+    usuario_id: int
+    data_inicio: datetime
+    data_fim: Optional[datetime] = None
+    km_inicial: float
+    km_final: Optional[float] = None
+    status: str  # ativa, finalizada, cancelada
+    valor_total: Optional[float] = None
+
+class Usuario(BaseModel):
+    id: int
+    nome: str
+    email: str
+    cpf: str
+    telefone: str
+    tipo_usuario: str  # cliente, admin
+    ativo: bool = True
+
+class Estacao(BaseModel):
+    id: int
+    nome: str
+    endereco: str
+    latitude: float
+    longitude: float
+    capacidade: int
+    vagas_disponiveis: int
+    tipo_carregador: str  # rápido, normal
+
+# ======================
+# Banco de Dados Fake (Em Memória)
+# ======================
+
+db_veiculos = [
+    Veiculo(id=1, nome="Scooter X200", tipo="Scooter Elétrico", modelo="Xiaomi Pro 2", 
+            autonomia=40, preco_por_hora=15.00, preco_por_km=0.50, disponivel=True,
+            imagem_url="https://img.icons8.com/color/96/scooter.png", categoria="Padrão"),
+    Veiculo(id=2, nome="Bike Speed Pro", tipo="Bike Elétrica", modelo="Trek District+", 
+            autonomia=60, preco_por_hora=10.00, preco_por_km=0.30, disponivel=True,
+            imagem_url="https://img.icons8.com/color/96/bicycle.png", categoria="Básico"),
+    Veiculo(id=3, nome="Carro Compact", tipo="Carro Elétrico", modelo="Tesla Model 3", 
+            autonomia=300, preco_por_hora=50.00, preco_por_km=1.50, disponivel=False,
+            imagem_url="https://img.icons8.com/color/96/sedan.png", categoria="Premium"),
+    Veiculo(id=4, nome="Monopatinete Z", tipo="Monopatinete", modelo="Segway Ninebot", 
+            autonomia=25, preco_por_hora=12.00, preco_por_km=0.40, disponivel=True,
+            imagem_url="https://img.icons8.com/color/96/scooter.png", categoria="Básico"),
+    Veiculo(id=5, nome="Scooter Premium", tipo="Scooter Elétrico", modelo="Niu NGT", 
+            autonomia=70, preco_por_hora=25.00, preco_por_km=0.80, disponivel=True,
+            imagem_url="https://img.icons8.com/color/96/scooter.png", categoria="Premium"),
+]
+
+db_estacoes = [
+    Estacao(id=1, nome="Estação Central", endereco="Av. Paulista, 1000", 
+            latitude=-23.5629, longitude=-46.6544, capacidade=20, vagas_disponiveis=12,
+            tipo_carregador="rápido"),
+    Estacao(id=2, nome="Estação Zona Sul", endereco="Av. Santo Amaro, 500", 
+            latitude=-23.6238, longitude=-46.7021, capacidade=15, vagas_disponiveis=8,
+            tipo_carregador="normal"),
+    Estacao(id=3, nome="Estação Zona Leste", endereco="Av. Radialista, 200", 
+            latitude=-23.6102, longitude=-46.5798, capacidade=10, vagas_disponiveis=5,
+            tipo_carregador="rápido"),
+]
+
+db_locacoes = []
+db_usuarios = [
+    Usuario(id=1, nome="Admin Sistema", email="admin@renova.com.br", cpf="00000000000",
+            telefone="11999999999", tipo_usuario="admin", ativo=True),
+]
+
+# ======================
+# Endpoints - Veículos
+# ======================
+
+@app.get("/")
+async def raiz():
+    return {
+        "mensagem": "Bem-vindo à Renova SVA API",
+        "status": "Online",
+        "versao": "1.0.0",
+        "documentacao": "/docs",
+        "data": datetime.now().isoformat()
+    }
+
+@app.get("/api/veiculos", response_model=List[Veiculo])
+async def listar_veiculos(disponivel_only: bool = False):
+    """Retorna lista de veículos"""
+    if disponivel_only:
+        return [v for v in db_veiculos if v.disponivel]
+    return db_veiculos
+
+@app.get("/api/veiculos/{veiculo_id}", response_model=Veiculo)
+async def get_veiculo(veiculo_id: int):
+    """Retorna um veículo específico"""
+    for veiculo in db_veiculos:
+        if veiculo.id == veiculo_id:
+            return veiculo
+    raise HTTPException(status_code=404, detail="Veículo não encontrado")
+
+@app.post("/api/veiculos")
+async def criar_veiculo(veiculo: Veiculo):
+    """Cria um novo veículo"""
+    veiculo.id = len(db_veiculos) + 1
+    db_veiculos.append(veiculo)
+    return {"sucesso": True, "veiculo": veiculo}
+
+# ======================
+# Endpoints - Locação
+# ======================
+
+@app.get("/api/locacoes", response_model=List[Locacao])
+async def listar_locacoes(usuario_id: int = None):
+    """Retorna lista de locações"""
+    if usuario_id:
+        return [l for l in db_locacoes if l.usuario_id == usuario_id]
+    return db_locacoes
+
+@app.post("/api/locacoes")
+async def criar_locacao(veiculo_id: int, usuario_id: int, km_inicial: float):
+    """Cria uma nova locação"""
+    # Verifica se veículo existe e está disponível
+    veiculo_encontrado = None
+    for v in db_veiculos:
+        if v.id == veiculo_id:
+            veiculo_encontrado = v
+            break
+    
+    if not veiculo_encontrado:
+        raise HTTPException(status_code=404, detail="Veículo não encontrado")
+    
+    if not veiculo_encontrado.disponivel:
+        raise HTTPException(status_code=400, detail="Veículo indisponível")
+    
+    # Cria locação
+    locacao = Locacao(
+        id=len(db_locacoes) + 1,
+        veiculo_id=veiculo_id,
+        usuario_id=usuario_id,
+        data_inicio=datetime.now(),
+        km_inicial=km_inicial,
+        status="ativa"
+    )
+    
+    # Marca veículo como indisponível
+    veiculo_encontrado.disponivel = False
+    db_locacoes.append(locacao)
+    
+    return {
+        "sucesso": True,
+        "mensagem": f"Veículo {veiculo_encontrado.nome} locado com sucesso!",
+        "locacao": locacao
+    }
+
+@app.put("/api/locacoes/{locacao_id}/devolver")
+async def devolver_veiculo(locacao_id: int, km_final: float):
+    """Finaliza uma locação"""
+    for locacao in db_locacoes:
+        if locacao.id == locacao_id:
+            if locacao.status != "ativa":
+                raise HTTPException(status_code=400, detail="Locação já finalizada")
+            
+            # Calcula valor total
+            km_percorridos = km_final - locacao.km_inicial
+            
+            # Busca veículo para get preco
+            veiculo = None
+            for v in db_veiculos:
+                if v.id == locacao.veiculo_id:
+                    veiculo = v
+                    break
+            
+            if veiculo:
+                # Calcula por hora (mínimo 1 hora) e por km
+                tempo_horas = max(1, (datetime.now() - locacao.data_inicio).seconds / 3600)
+                valor = (tempo_horas * veiculo.preco_por_hora) + (km_percorridos * veiculo.preco_por_km)
+                
+                locacao.data_fim = datetime.now()
+                locacao.km_final = km_final
+                locacao.status = "finalizada"
+                locacao.valor_total = valor
+                
+                # Libera veículo
+                veiculo.disponivel = True
+                
+                return {
+                    "sucesso": True,
+                    "mensagem": "Veículo devolvido com sucesso!",
+                    "km_percorridos": km_percorridos,
+                    "tempo_horas": tempo_horas,
+                    "valor_total": round(valor, 2)
+                }
+    
+    raise HTTPException(status_code=404, detail="Locação não encontrada")
+
+# ======================
+# Endpoints - Estações
+# ======================
+
+@app.get("/api/estacoes", response_model=List[Estacao])
+async def listar_estacoes():
+    """Retorna lista de estações"""
+    return db_estacoes
+
+@app.get("/api/estacoes/{estacao_id}", response_model=Estacao)
+async def get_estacao(estacao_id: int):
+    """Retorna uma estação específica"""
+    for estacao in db_estacoes:
+        if estacao.id == estacao_id:
+            return estacao
+    raise HTTPException(status_code=404, detail="Estação não encontrada")
+
+# ======================
+# Endpoints - Estatísticas
+# ======================
+
+@app.get("/api/dashboard")
+async def get_dashboard():
+    """Retorna dados para dashboard"""
+    total_veiculos = len(db_veiculos)
+    veiculos_disponiveis = len([v for v in db_veiculos if v.disponivel])
+    veiculos_locados = total_veiculos - veiculos_disponiveis
+    locacoes_ativas = len([l for l in db_locacoes if l.status == "ativa"])
+    
+    return {
+        "total_veiculos": total_veiculos,
+        "veiculos_disponiveis": veiculos_disponiveis,
+        "veiculos_locados": veiculos_locados,
+        "locacoes_ativas": locacoes_ativas,
+        "total_estacoes": len(db_estacoes)
+    }
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
